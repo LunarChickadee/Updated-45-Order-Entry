@@ -423,19 +423,9 @@ memArray=«Mem?»
 
 
 ///*********!! not sure if there's any need for this anymore
-«M?»=?(«M?» contains "E" or «M?» contains "U" or «M?» contains "R", "", «M?»)
+;«M?»=?(«M?» contains "E" or «M?» contains "U" or «M?» contains "R",replacemultiple(«M?»,replacemultiple(E/U/R,/""/""/"","/")), «M?»)
 
-case waswindow contains "bulbs"
-    Bf=?(Bf=0,1,Bf)
-case waswindow contains "seeds"
-    S=?(S=0,1,S)
-case waswindow contains "ogs"
-    S=?(S=0,1,S)
-case waswindow contains "mt"
-    S=?(S=0,1,S)
-case waswindow contains "trees"
-    T=?(T=0,1,T)
-endcase
+call "filler/¬"
 
 
 //******!!needs testing
@@ -455,7 +445,7 @@ If Outstanding>0
 endif
 
 window waswindow
-window "customer_history"  /*#was customer_history:secret*/
+window "customer_history:secret"  /*#was customer_history:secret*/
 find «C#»=Num
 window waswindow
 Flag=grabdata(newyear+" mailing list", RedFlag)
@@ -2347,6 +2337,8 @@ on the right entry form
 also holds onto what branch this order is to check against for later
 -L 8/22
 */
+
+//_____CheckForm_________//
 case intOrder1 ≥ 700000
     openform "seedsinput"
     fromBranch="Seeds"
@@ -2363,6 +2355,7 @@ case intOrder1 ≥ 300000 and intOrder1 <400000
     openform "ogsinput"
     fromBranch="OGS"
 endcase
+//____EndCheckForm______//
 
 groupArray=?(Group≠"", Group, Con)
 ;rayc=«C#Text»
@@ -2447,7 +2440,8 @@ if OrderNo=int(OrderNo)
     or (OrderNo >= 520000 and OrderNo < 600000)
     or (OrderNo >= 620000 and OrderNo < 700000)
     or (OrderNo >= 710000 and OrderNo < 1000000)
-            call "updatemail/7"
+            ;call "updatemail/7"
+            call "NewSearch/`"
     endif
 endif
 
@@ -3605,8 +3599,28 @@ window "45 mailing list"
 ___ ENDPROCEDURE .CheckCode1 ___________________________________________________
 
 ___ PROCEDURE NewSearch/` ______________________________________________________
+/*
+This Function is supposed to either 
+1. find the customer already in the list
+    1a. Call Enter
+
+or
+
+2. add a new line and fill it with this new data
+
+*/
+
+
+
 global vChoice,vFirstInitial,vLastName,vExtracted,vExtracted2,vFirstIntLastName,vCustNum,
-vEmail,vPhoneNum, chooseCustomerArray,chooseCustChoice,rayj
+vEmail,vPhoneNum, chooseCustomerArray,chooseCustChoice,rayj,MLWildCard,MLWildCard2,orderWildCard,amperArray,thisCustomerLine
+
+//gets first name and last name
+//kept for possible dependencies, 
+//but made conArray to replace it
+//so I know when other things are calling for the Con
+rayj=Con[1," "][1,-2]+" "+Con["- ",-1][2,-1] 
+conArray=Con[1," "][1,-2]+" "+Con["- ",-1][2,-1]
 
 waswindow=info("windowname")
 
@@ -3621,58 +3635,74 @@ EntryDate=today()
 ono=«OrderNo»
 vzip=Zip
 vd=«C#»  // #Davids old code, leaving in case there are dependencies
-rayj=Con[1," "][1,-2]+" "+Con["- ",-1][2,-1] //gets first name and last name
-//kept rayj for dependencies, but made a new array named clearer for my use
-conArray=Con[1," "][1,-2]+" "+Con["- ",-1][2,-1]
-;place=MAd["0-9",-1][1,-1]
-place=MAd
-vExtracted=""
-vExtracted=extract(rayj," ",1)
-vFirstInitial=vExtracted[1,1]
-vExtracted2=""
-vLastName=extract(rayj," ",2)
 vCustNum=«C#»
 vEmail=Email
 vPhoneNum=Telephone
 vChoice=0
+place=MAd  //was originally just the number to the end of the address, but PO boxes broke it
+vCustNum=«C#»
+vEmail=Email
+vPhoneNum=Telephone
+vChoice=0
+MLWildCard=""
+MLWildCard2=""
+orderWildCard=""
+thisCustomerLine=""
 
-WinNumber=arraysearch(info("windows"), "mailing list", 1,¶)
+
+//builds a WildCard of the name (see MATCH in the Pan Ref)
+    vExtracted=""
+    vExtracted=extract(conArray," ",1)
+    vFirstInitial=vExtracted[1,1]
+    vExtracted2=""
+    vLastName=extract(conArray," ",2)
+    orderWildCard=str(vFirstInitial+"*"+vLastName)
+
+
+
+field «1stPayment»
+
+///___make sure mailing list is open_____
+WinNumber=arraysearch(info("windows"), thisFYear+" mailing list", 1,¶)
 if WinNumber=0
     openfile newyear+" mailing list"
 endif
 
+///____can we find them just with the C# they have on the order?
 window newyear+" mailing list"
 selectall
 if vd>0
     find «C#»=vd
     if info("found")=-1
-        YesNo "Enter this one?"
+        
+        thisCustomerLine=arrayrange(exportline(),1,7,¬)+" "+array(exportline(),16,¬)
+        YesNo "Enter this one?"+¶+thisCustomerLine
         if clipboard() contains "Yes"
             call "enter/e"
             stop
             endif
     else
-        farcall (thisFYear+"orders"),"NewSearch/`"
+        ////____If we can't let's do a smart search_____///
+        goto Choose
         endif
     endif
-;selectall
 
-/*
 
-supergettext vChoice,“caption="Please Choose How You'd like to Search:
-1=Email 2=Phone Number 3=Mailing Address 4=Add New Customer 
-Use the Command + Tilde '~' key to run this again!" captionheight=3”
-*/
+Choose:
 
 global ChoiceList, Choice, Options
 Choice=""
 
-ChoiceList="By Email
+ChoiceList="First Initial & Last Name
+By Email
 Phone Number
 Mailing Address
-My Own Search
-Add New Customer Instead"
-superchoicedialog ChoiceList, Choice, {caption="How Would You Like to Search?" captionstyle=bold}
+My Own Search 
+Add New Customer Instead
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Please tell Lunar if you want another option here"
+superchoicedialog ChoiceList, Choice, {caption="How Would You Like to Search?
+You can click cancel to stop this process" captionstyle=bold captionheight="2" height="250" }
 if info("dialogtrigger") contains "cancel"
 Stop
 endif
@@ -3682,32 +3712,52 @@ vChoice=arraysearch(ChoiceList, Choice, 1, ¶)
 
 case vChoice=1
     window newyear+" mailing list"
+    //try to find the first initial and last name
+    //example J*Forester would be the wildcard, and would match names like Jane Forester
+    select Con match orderWildCard
+        //if it doesn't find it, check the & names
+        if info("empty")
+            select Con contains "&"
+                selectwithin strip(array(Con,1,"&")) match orderWildCard // name left of & matches (Jane Forester & Kathrine Kidd)
+                    or strip(array(Con,2,"&")) match orderWildCard // name right of & matches (Katherine Kidd & Jane Forester)
+                    or strip(array(Con,1,"&"))+" "+extract(strip(array(Con,2,"&"))," ",2)["- ",-1] match orderWildCard 
+                    //name to the left plus the last name to the right matches (Jane & Katherine Forester)
+                        if info("empty")
+                            message "Unable to find anyone with that name. Please, choose another option"
+                                goto Choose
+                                    endif
+                                        endif
+
+case vChoice=2
+    window newyear+" mailing list"
     select email=vEmail
     if info("empty")
         message "No email match found."
-        farcall (thisFYear+"orders"),"NewSearch/`"
+        goto Choose
     endif
-case vChoice=2
+case vChoice=3
     window newyear+" mailing list"
     select phone=vPhoneNum
         if info("empty")
             message "No phone match found."
-            farcall (thisFYear+"orders"),"NewSearch/`"
+            goto Choose
         endif
-case vChoice=3
+case vChoice=4
     window newyear+" mailing list"
     select MAd=place and Zip=vzip
         if info("empty")
             message "No address match found."
-            farcall (thisFYear+"orders"),"NewSearch/`"
+            goto Choose
         endif
-case vChoice=4
+case vChoice=5
     window newyear+" mailing list"
     findselect
     if info("dialogtrigger") contains "cancel"
-    farcall (thisFYear+"orders"),"NewSearch/`"
+    goto Choose
         endif
-case vChoice=5
+    else 
+        stop
+case vChoice=6
     window newyear+" mailing list"
         insertrecord
         Con=grabdata(newyear+"orders",Con) 
@@ -3745,17 +3795,31 @@ endcase
 window thisFYear+" mailing list"
 
 arrayselectedbuild chooseCustomerArray,¶,"",exportline()
-        superchoicedialog chooseCustomerArray,chooseCustChoice, {caption="Please choose the appropriate customer or click other search to try sometning else."
-        buttons=OK;OtherSearch:100;Cancel height="600" width="800"}
+        superchoicedialog chooseCustomerArray,chooseCustChoice, {
+        captionstyle=bold
+        caption="Please choose the appropriate customer or click other search to try something else.
+        You can click cancel to look through the selection at any time"
+        buttons=OK;OtherSearch:100;Cancel
+        captionheight="2" 
+        height="600" width="800"}
             if info("dialogtrigger") contains "cancel"
                 stop
                     endif
             if info("dialogtrigger") contains "other"
-                farcall (thisFYear+"orders"),"NewSearch/`"
+                goto Choose
                     endif
             if info("dialogtrigger") contains "ok"
                 find exportline() contains chooseCustChoice
+                if info("found")=-1
+                    thisCustomerLine=arrayrange(exportline(),1,7,¬)+" "+array(exportline(),16,¬)
+                    YesNo "Is this is the customer you want?"+¶+thisCustomerLine
+                    if clipboard() contains "Yes"
+                        call "enter/e"
+                        stop
+                        endif
                     endif
+                endif
+
 
 
 ___ ENDPROCEDURE NewSearch/` ___________________________________________________
